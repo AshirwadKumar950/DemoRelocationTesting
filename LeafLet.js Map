@@ -1,0 +1,401 @@
+//HTML CODE
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Nearby Places Finder</title>
+  <meta charset="utf-8" />
+
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel = "stylesheet" href = "style.css" />
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    body { margin: 0; display: flex; }
+    #map { height: 100vh; width: 75%; }
+    #panel {
+      width: 25%;
+      padding: 10px;
+      overflow-y: auto;
+      font-family: Arial;
+    }
+  </style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<div id="panel">
+  <h3>Search Nearby Places</h3>
+
+  <input id="placeInput"
+         type="text"
+         placeholder="hospital, school, park"
+         style="width:100%; padding:6px;" />
+
+  <br><br>
+
+  <label>Radius (km)</label>
+  <input id="radiusInput"
+         type="number"
+         value="5"
+         min="1"
+         style="width:100%; padding:6px;" />
+
+  <p><b>Click on map to search</b></p>
+
+  <hr>
+  <div id="results"></div>
+</div>
+
+
+<script src="script.js"></script>
+</body>
+</html>
+
+
+
+//CSS CODE
+.place-label {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: #222;
+  font-size: 13px;
+  font-weight: 600;
+  text-shadow: 0 0 3px white;
+  pointer-events: auto;
+}
+
+
+
+
+//JS CODE
+let map;    // Leaflet map instance
+
+let markers = []; // Store all POI markers so we can clear them
+
+let selectedPoint = null;   // Stores the point user clicked (search center)
+
+let routeLayer = null;  // Stores current route polyline
+
+let searchMarker = null;  // Stores the red dot showing search center
+
+// Load saved places OR start empty NEW: PERSISTENT CUSTOM PLACES (localStorage)
+let customPlaces = JSON.parse(
+  localStorage.getItem("customPlaces")
+) || [];
+
+
+//TAG MAPPING (Human word → OSM tag)
+const tagMap = {
+  hospital: { key: "amenity", value: "hospital" },
+  school: { key: "amenity", value: "school" },
+  park: { key: "leisure", value: "park" },
+  gym: { key: "leisure", value: "fitness_centre" },
+  market: { key: "shop", value: "supermarket" },
+  pharmacy: { key: "amenity", value: "pharmacy" },
+  temple: { key: "amenity", value: "place_of_worship" },
+  cafe: { key: "amenity", value: "cafe"},
+  bar: { key: "amenity", value: "bar"},
+  restaurant: { key: "amenity", value: "restaurant"},
+  mess: { key: "amenity", value: "restaurant"}
+};
+
+
+
+map = L.map('map'); //MAP INITIALIZATION
+
+
+map.on("zoomend", () => {
+  const zoom = map.getZoom();
+  document.querySelectorAll(".place-label").forEach(label => {
+    label.style.display = zoom >= 16 ? "block" : "none";
+  });
+});
+
+//BASE MAP LAYERS
+const streetMap = L.tileLayer(
+  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  { attribution: '© OpenStreetMap' }
+);
+
+const satelliteMap = L.tileLayer(
+  'https://server.arcgisonline.com/ArcGIS/rest/services/' +
+  'World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  { attribution: '© Esri' }
+);
+
+const darkMap = L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  { attribution: '© CartoDB' }
+);
+
+streetMap.addTo(map);
+
+L.control.layers({
+  "Street View": streetMap,
+  "Satellite View": satelliteMap,
+  "Dark Mode": darkMap
+}).addTo(map);
+
+
+//GPS LOCATION
+navigator.geolocation.getCurrentPosition(
+  pos => {
+    map.setView(
+      [pos.coords.latitude, pos.coords.longitude],
+      15
+    );
+    L.marker([pos.coords.latitude, pos.coords.longitude])
+      .addTo(map)
+      .bindPopup("You are here")
+      .openPopup();
+  },
+  () => {
+    map.setView([28.6139, 77.2090], 13);
+  }
+);
+
+
+function renderCustomPlaces() {
+  customPlaces.forEach(place => {
+
+    const label = L.tooltip({
+      permanent: true,
+      direction: "top",
+      className: "place-label"
+    })
+      .setLatLng([place.lat, place.lon])
+      .setContent(place.name)
+      .addTo(map);
+
+    markers.push(label); // so we can clear if needed
+  });
+}
+
+
+// Show saved places when app loads
+renderCustomPlaces();
+
+
+//NEW: RIGHT-CLICK TO ADD PLACE (PERMANENT)
+map.on('contextmenu', e => {
+  const name = prompt("Place name?");
+  const type = prompt("Place type (gym / yoga / school / etc)?");
+
+  if (!name || !type) return;
+
+  const place = {
+    name,
+    type: type.toLowerCase(),
+    lat: e.latlng.lat,
+    lon: e.latlng.lng
+  };
+
+
+  const lati = e.latlng.lat;
+  const loni = e.latlng.lng;
+  console.log(lati);
+  console.log(loni);
+  // Save in memory
+  customPlaces.push(place);
+
+  // Save permanently
+  localStorage.setItem(
+    "customPlaces",
+    JSON.stringify(customPlaces)
+  );
+
+// Show on map this is used for marking custom places 
+//   const marker = L.marker([place.lat, place.lon])
+//     .addTo(map)
+//     .bindPopup(`<b>${place.name}</b><br>${place.type}`)
+//     .openPopup();
+
+//   markers.push(marker);
+
+//this is used for labelling custom places(not showing marking it will show just the label)
+//after zooming in enough
+    const label = L.tooltip({
+        permanent: true,
+        direction: "top",
+        className: "place-label"
+    })
+        .setLatLng([place.lat, place.lon])
+        .setContent(place.name)
+        .addTo(map);
+
+    markers.push(label);
+
+});
+
+// map.on('contextmenu', e => {
+//   const lat = e.latlng.lat;
+//   const lon = e.latlng.lng;
+
+//   console.log("Latitude:", lat);
+//   console.log("Longitude:", lon);
+// });
+
+
+//map click to select point
+map.on('click', e => {
+  selectedPoint = e.latlng;
+
+  clearMarkers();
+
+  if (routeLayer) {
+    map.removeLayer(routeLayer);
+    routeLayer = null;
+  }
+
+  if (searchMarker) {
+    map.removeLayer(searchMarker);
+  }
+
+  searchMarker = L.circleMarker(
+    [selectedPoint.lat, selectedPoint.lng],
+    { radius: 6, color: 'red' }
+  ).addTo(map);
+
+  fetchPlaces(selectedPoint.lat, selectedPoint.lng);
+});
+
+
+//fetch places from overpass API
+function fetchPlaces(lat, lon) {
+
+  const input = document
+    .getElementById("placeInput")
+    .value
+    .toLowerCase();
+
+  const radiusKm =
+    parseInt(document.getElementById("radiusInput").value) || 5;
+  const radiusM = radiusKm * 1000;
+
+  const placeList = input
+    .split(',')
+    .map(p => p.trim())
+    .map(p => p.endsWith('s') ? p.slice(0, -1) : p)
+    .filter(p => tagMap[p]);
+
+  if (placeList.length === 0) {
+    alert("Enter valid place types");
+    return;
+  }
+
+  const queries = placeList.map(p =>
+    `node["${tagMap[p].key}"="${tagMap[p].value}"](around:${radiusM},${lat},${lon});
+     way["${tagMap[p].key}"="${tagMap[p].value}"](around:${radiusM},${lat},${lon});
+     relation["${tagMap[p].key}"="${tagMap[p].value}"](around:${radiusM},${lat},${lon});`
+  ).join("\n");
+
+  const query = `
+  [out:json];
+  (${queries});
+  out center;
+  `;
+
+  fetch("https://overpass-api.de/api/interpreter", {
+    method: "POST",
+    body: query
+  })
+    .then(res => res.json())
+    .then(data => showResults(data.elements, lat, lon));
+}
+
+
+//show results on map
+function showResults(places, lat, lon) {
+
+  const container = document.getElementById("results");
+  container.innerHTML = "";
+
+  places.forEach(p => {
+
+    const lat2 = p.lat || p.center?.lat;
+    const lon2 = p.lon || p.center?.lon;
+    if (!lat2 || !lon2) return;
+
+    const name =
+      p.tags.name ||
+      p.tags.amenity ||
+      p.tags.shop ||
+      p.tags.leisure ||
+      "Unnamed";
+
+    const type =
+      p.tags.amenity ||
+      p.tags.shop ||
+      p.tags.leisure ||
+      "unknown";
+
+    const dist = distance(lat, lon, lat2, lon2);
+
+    const marker = L.marker([lat2, lon2])
+      .addTo(map)
+      .bindPopup(`${name}<br>${type}<br>${dist} km`)
+      .on('click', () => {
+        drawRoute(lat, lon, lat2, lon2);
+      });
+
+    markers.push(marker);
+
+    container.innerHTML += `
+      <p>
+        <b>${name}</b><br>
+        ${type} – ${dist} km
+      </p>
+    `;
+  });
+}
+
+
+//routing 
+function drawRoute(startLat, startLon, endLat, endLon) {
+
+  if (routeLayer) map.removeLayer(routeLayer);
+
+  const url =
+    `https://router.project-osrm.org/route/v1/driving/` +
+    `${startLon},${startLat};${endLon},${endLat}` +
+    `?overview=full&geometries=geojson`;
+
+  fetch(url)
+    .then(res => res.json())
+    .then(data => {
+      routeLayer = L.geoJSON(data.routes[0].geometry, {
+        style: { color: 'blue', weight: 5 }
+      }).addTo(map);
+    });
+}
+
+
+//utility to clear markers
+function clearMarkers() {
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+}
+
+//utility to calculate distance between 2 lat/lon points
+function distance(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+
+  return (
+    R * 2 *
+    Math.asin(
+      Math.sqrt(
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1 * Math.PI / 180) *
+        Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) ** 2
+      )
+    )
+  ).toFixed(2);
+}
