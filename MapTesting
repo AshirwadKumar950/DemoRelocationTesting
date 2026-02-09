@@ -1,0 +1,80 @@
+//Manual testing of map putting some longitude and latitude manually
+CREATE TABLE places(
+    place_id SERIAL PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    latitude DOUBLE PRECISION NOT NULL,
+    longitude DOUBLE PRECISION NOT NULL
+);
+
+INSERT INTO places (name, type, latitude, longitude)
+VALUES
+('My_Home','home', 30.269316074388968, 77.99202648947174),
+('JoPaji', 'restaurent', 30.269668186577405, 77.99260854721071),
+('Sobha', 'mess',  30.270200985513775, 77.9930967092514),
+('Bistro', 'mess',  30.270858872384505, 77.99441635608675),
+('Ghadwali', 'restaurent',  30.270465067392983, 77.9957038164139),
+('Buddha Peace Place','temple',  30.27092836721901, 77.99532294273376),
+('Graphic Era University', 'college',  30.267448932075503, 77.99501180648804),
+('Paradise Gym', 'gym', 30.269719150078984, 77.99598813056947),
+('The Sweat Arena', 'gym',  30.270506764466866, 77.99621343612672),
+('Food Corner', 'food',  30.2700295635628, 77.99667477607728),
+('Air Force', 'air_force',  30.265123062455665, 78.00182461738588),
+('Lake', 'lake', 30.268556249047727, 78.00798296928407),
+('PlayGround', 'playground',  30.268139269227156, 78.00623416900636),
+('Velmed Hospital', 'hospital',  30.272142202393855, 78.00777375698091),
+('Military Compartments', 'military',  30.262570102295378, 78.00309062004091),
+('Dry River', 'river',  30.252654164763992, 78.00580501556396),
+('KFC', 'restaurent',  30.275000678604698, 77.98926651477815),
+('Dominos', 'restaurent',  30.274792202602978, 77.98923432826996),
+('Lapinoz', 'restaurent',  30.274838530641627, 77.98927187919618),
+('Highway', 'road',  30.274189936110623, 77.98876762390138),
+('Running Ground', 'ground',  30.271299005505487, 77.9882311820984),
+('Saint Mary Hospital', 'hospital',  30.269626489147324, 77.99724876880646),
+('Graphic Era Hill University', 'college',  30.273036353818586, 77.99996316432954),
+('Church', 'temple',  30.269316074388968, 77.9978656768799),
+('Graphic Era Gate No-2', 'general',  30.268783270649884, 77.99754381179811),
+('Dental Clinic', 'clinic',  30.26374234088288, 78.00005972385406),
+('Eye Clinic', 'clinic',  30.262194797655887, 77.99934625625612),
+('Buddha Temple', 'temple',  30.26177779081859, 77.99723267555238),
+('Panchwati Mandir', 'temple', 30.27458372615845, 77.99159467220308),
+('Pipleshwar Mandir','temple', 30.26738406793259, 77.99319326877595);
+
+//my location
+-- Latitude: 30.269316074388968
+-- Longitude: 77.99202648947174
+
+
+//Query testing
+-- Check postgis
+-- SELECT * FROM pg_extension;
+
+-- Add postgis
+-- CREATE EXTENSION IF NOT EXISTS postgis;
+
+--Right now table has long and lati PostGIS works better with GEOGRAPHY(Point, 4326).
+-- ALTER TABLE places
+-- ADD COLUMN location GEOGRAPHY(Point, 4326);
+
+
+-- UPDATE places
+-- SET location = ST_SetSRID(
+--     ST_MakePoint(longitude, latitude),
+--     4326
+-- )::geography;
+
+
+-- CREATE INDEX idx_places_location
+-- ON places
+-- USING GIST (location);
+
+SELECT name,
+       ST_Distance(
+           location,
+           ST_MakePoint(77.99202648947174, 30.269316074388968)::geography
+       ) / 1000 AS distance_km
+FROM places
+WHERE type = 'temple'
+ORDER BY distance_km
+LIMIT 3;
+
